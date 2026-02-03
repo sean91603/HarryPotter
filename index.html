@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>魔法對決：形容詞語法挑戰</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Cormorant+Garamond:wght@400;600&display=swap');
+        
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000; /* 預設全黑，等待圖片載入 */
+            user-select: none;
+            touch-action: none;
+            font-family: 'Cinzel', serif;
+        }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        
+        #game-ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .status-bar {
+            position: absolute;
+            top: 25px;
+            width: 200px;
+            background: rgba(10, 15, 30, 0.7);
+            backdrop-filter: blur(5px);
+            padding: 10px 14px;
+            border: 1px solid rgba(184, 134, 11, 0.6);
+            border-radius: 12px;
+            pointer-events: auto;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+        }
+        #player-status { left: 25px; border-left: 4px solid #e63946; }
+        #boss-status { right: 25px; border-right: 4px solid #2a9d8f; text-align: right; }
+        
+        .hp-container {
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.2);
+            margin-top: 8px;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .hp-fill { height: 100%; transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        #player-hp-fill { background: linear-gradient(90deg, #ff4d6d, #ff0000); box-shadow: 0 0 10px #ff0000; }
+        #boss-hp-fill { background: linear-gradient(90deg, #2ecc71, #00ff88); box-shadow: 0 0 10px #2ecc71; }
+
+        #central-info {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8); /* 增加文字陰影以適應各種背景 */
+        }
+        #global-timer { 
+            font-size: 2.8rem; 
+            font-weight: 900; 
+            color: #daa520; 
+            text-shadow: 0 0 20px rgba(218, 165, 32, 0.8), 2px 2px 0 #000;
+        }
+
+        #question-panel {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            border: 2px solid #b8860b;
+            padding: 12px 18px;
+            border-radius: 18px;
+            width: auto;
+            min-width: 260px;
+            text-align: center;
+            pointer-events: auto;
+            box-shadow: 0 10px 50px rgba(0,0,0,0.8);
+            display: none;
+        }
+        
+        #answer-timer-ring {
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 38px;
+            height: 38px;
+            background: #fff;
+            border: 3px solid #daa520;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 0.9rem;
+            color: #b8860b;
+        }
+
+        .option-btn {
+            background: #f8f8f8;
+            color: #111;
+            padding: 6px 16px;
+            margin: 4px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            transition: all 0.2s;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-family: 'Cormorant Garamond', serif;
+            font-weight: 700;
+        }
+        .option-btn:hover { 
+            background: #daa520;
+            color: #fff;
+            border-color: #daa520;
+            transform: scale(1.05);
+        }
+
+        #overlay {
+            position: absolute;
+            inset: 0;
+            /* 使用冒險.png 作為背景 */
+            background-image: url('冒險.png');
+            background-size: cover;
+            background-position: center;
+            background-color: #050810; /* 備用背景色 */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            color: white;
+        }
+        /* 為了確保文字在圖片上清晰可見，加一層半透明黑底 */
+        #overlay::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: -1;
+        }
+
+        #start-btn {
+            background: rgba(0, 0, 0, 0.6);
+            color: #daa520;
+            font-weight: 700;
+            padding: 15px 50px;
+            border: 2px solid #daa520;
+            border-radius: 4px;
+            transition: all 0.4s;
+            cursor: pointer;
+            font-size: 1.1rem;
+            letter-spacing: 4px;
+            backdrop-filter: blur(5px);
+        }
+        #start-btn:hover {
+            background: #daa520;
+            color: #000;
+            box-shadow: 0 0 30px rgba(218, 165, 32, 0.4);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-ui">
+        <div id="player-status" class="status-bar">
+            <div class="text-white text-[10px] font-bold tracking-widest opacity-80">WIZARD</div>
+            <div class="text-[#daa520] text-[12px] font-black">HARRY POTTER</div>
+            <div class="hp-container"><div id="player-hp-fill" class="hp-fill"></div></div>
+        </div>
+
+        <div id="boss-status" class="status-bar">
+            <div class="text-white text-[10px] font-bold tracking-widest opacity-80">DARK LORD</div>
+            <div class="text-[#2a9d8f] text-[12px] font-black">VOLDEMORT</div>
+            <div class="hp-container"><div id="boss-hp-fill" class="hp-fill"></div></div>
+        </div>
+
+        <div id="central-info">
+            <div id="global-timer">50</div>
+            <div id="match-score" class="text-[10px] tracking-[0.3em] text-white font-bold mt-1 opacity-90 shadow-black drop-shadow-md">WINS: 0 - 0</div>
+        </div>
+
+        <div id="question-panel">
+            <div id="answer-timer-ring">5</div>
+            <div class="mb-2">
+                <span id="q-type" class="text-[#b8860b] text-[10px] font-bold tracking-[0.2em] uppercase">Comparative</span>
+                <h2 id="q-word" class="text-xl font-black text-gray-900 leading-none mt-1 italic">STRONG</h2>
+            </div>
+            <div id="options-container" class="flex flex-wrap justify-center"></div>
+        </div>
+    </div>
+
+    <div id="overlay">
+        <h1 id="overlay-title" class="text-7xl font-black mb-4 text-white tracking-widest italic" style="font-family: 'Cinzel'; text-shadow: 0 0 20px black;">MYSTIC DUEL</h1>
+        <p id="overlay-desc" class="text-gray-300 tracking-[0.8em] mb-12 text-center text-[10px] uppercase">ADJECTIVE GRAMMAR MASTERY</p>
+        <button id="start-btn">BEGIN INCANTATION</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // 載入底圖，用於 Canvas 繪製
+        const bgImage = new Image();
+        bgImage.src = '冒險.png';
+        
+        let bgLoaded = false;
+        bgImage.onload = () => { 
+            console.log("背景圖片載入成功");
+            bgLoaded = true; 
+        };
+        bgImage.onerror = () => { 
+            console.log("背景圖片載入失敗 (冒險.png)，將使用預設星空背景");
+            bgLoaded = false; 
+        };
+
+        let gameState = 'START';
+        let globalTime = 50;
+        let answerTime = 5;
+        let playerHP = 5;
+        let bossHP = 10;
+        let playerWins = 0;
+        let bossWins = 0;
+        let currentQ = null;
+        let effects = [];
+        let stars = [];
+        let magicCircles = [];
+        let backgroundFlashes = [];
+        let shake = 0;
+        let gTimer, aTimer;
+
+        const adjectives = [
+            { base: "Strong", comp: "Stronger", super: "Strongest" },
+            { base: "Big", comp: "Bigger", super: "Biggest" },
+            { base: "Smart", comp: "Smarter", super: "Smartest" },
+            { base: "Fast", comp: "Faster", super: "Fastest" },
+            { base: "Good", comp: "Better", super: "Best" },
+            { base: "Bad", comp: "Worse", super: "Worst" },
+            { base: "Deep", comp: "Deeper", super: "Deepest" },
+            { base: "Young", comp: "Younger", super: "Youngest" },
+            { base: "Cold", comp: "Colder", super: "Coldest" },
+            { base: "Bright", comp: "Brighter", super: "Brightest" }
+        ];
+
+        let harryPos = { x: 0, y: 0 };
+        let voldyPos = { x: 0, y: 0 };
+
+        function initScene() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            harryPos = { x: canvas.width * 0.25, y: canvas.height * 0.68 };
+            voldyPos = { x: canvas.width * 0.75, y: canvas.height * 0.68 };
+            
+            stars = [];
+            for(let i=0; i<150; i++) {
+                stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: Math.random() * 2,
+                    blinkSpeed: 0.01 + Math.random() * 0.05,
+                    opacity: Math.random()
+                });
+            }
+
+            magicCircles = [
+                { x: harryPos.x, y: harryPos.y + 120, rotation: 0, color: 'rgba(0, 234, 255, 0.3)' },
+                { x: voldyPos.x, y: voldyPos.y + 120, rotation: 0, color: 'rgba(42, 157, 143, 0.3)' }
+            ];
+        }
+
+        function startGame() {
+            gameState = 'PLAYING';
+            document.getElementById('overlay').style.display = 'none';
+            document.getElementById('question-panel').style.display = 'block';
+            resetMatch();
+            startGlobalTimer();
+            nextQuestion();
+        }
+
+        function resetMatch() {
+            playerHP = 5;
+            bossHP = 10;
+            updateUI();
+        }
+
+        function updateUI() {
+            document.getElementById('player-hp-fill').style.width = (playerHP / 5) * 100 + '%';
+            document.getElementById('boss-hp-fill').style.width = (bossHP / 10) * 100 + '%';
+            document.getElementById('match-score').innerText = `WINS: ${playerWins} - ${bossWins}`;
+        }
+
+        function startGlobalTimer() {
+            clearInterval(gTimer);
+            globalTime = 50;
+            gTimer = setInterval(() => {
+                if (gameState === 'PLAYING') {
+                    globalTime--;
+                    document.getElementById('global-timer').innerText = globalTime;
+                    if (globalTime <= 0) endMatch('TIME_UP');
+                }
+            }, 1000);
+        }
+
+        function nextQuestion() {
+            const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+            const types = ["base", "comp", "super"];
+            const targetType = types[Math.floor(Math.random() * 3)];
+            const labels = { base: "Base Form", comp: "Comparative", super: "Superlative" };
+
+            currentQ = { adj, targetType, answer: adj[targetType] };
+            document.getElementById('q-type').innerText = labels[targetType];
+            document.getElementById('q-word').innerText = adj.base.toUpperCase();
+            
+            const options = [adj.base, adj.comp, adj.super].sort(() => Math.random() - 0.5);
+            const container = document.getElementById('options-container');
+            container.innerHTML = '';
+            
+            options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = 'option-btn';
+                btn.innerText = opt;
+                btn.onclick = () => checkAnswer(opt);
+                container.appendChild(btn);
+            });
+
+            answerTime = 5;
+            document.getElementById('answer-timer-ring').innerText = answerTime;
+            clearInterval(aTimer);
+            aTimer = setInterval(() => {
+                if (gameState !== 'PLAYING') return;
+                answerTime--;
+                document.getElementById('answer-timer-ring').innerText = answerTime;
+                if (answerTime <= 0) checkAnswer(null);
+            }, 1000);
+        }
+
+        function checkAnswer(selected) {
+            if (gameState !== 'PLAYING') return;
+            clearInterval(aTimer);
+
+            if (selected === currentQ.answer) {
+                bossHP -= 1;
+                shake = 15;
+                createImpact(voldyPos.x, voldyPos.y - 100, '#00eaff');
+                createSpell(harryPos.x + 60, harryPos.y - 60, voldyPos.x - 60, voldyPos.y - 100, '#00eaff');
+                backgroundFlashes.push({ life: 1.0, color: 'rgba(0, 234, 255, 0.15)' });
+            } else {
+                playerHP -= 1;
+                shake = 15;
+                createImpact(harryPos.x, harryPos.y - 100, '#ff1a1a');
+                createSpell(voldyPos.x - 60, voldyPos.y - 100, harryPos.x + 60, harryPos.y - 60, '#ff1a1a');
+                backgroundFlashes.push({ life: 1.0, color: 'rgba(255, 26, 26, 0.15)' });
+            }
+
+            updateUI();
+            if (playerHP <= 0 || bossHP <= 0) {
+                endMatch(playerHP > 0 ? 'PLAYER_WIN' : 'BOSS_WIN');
+            } else {
+                gameState = 'WAITING';
+                setTimeout(() => { if(gameState === 'WAITING') { gameState = 'PLAYING'; nextQuestion(); } }, 800);
+            }
+        }
+
+        function endMatch(reason) {
+            gameState = 'END';
+            clearInterval(gTimer);
+            clearInterval(aTimer);
+            setTimeout(() => {
+                document.getElementById('overlay').style.display = 'flex';
+                document.getElementById('question-panel').style.display = 'none';
+                document.getElementById('overlay-title').innerText = reason === 'PLAYER_WIN' ? "TRIUMPH" : "DEFEAT";
+                document.getElementById('start-btn').innerText = "RESTORE ENERGY";
+                if(reason === 'PLAYER_WIN') playerWins++; else bossWins++;
+            }, 1200);
+        }
+
+        function createSpell(x1, y1, x2, y2, color) {
+            effects.push({ type: 'spell', x1, y1, x2, y2, color, life: 1.0 });
+        }
+
+        function createImpact(x, y, color) {
+            for(let i=0; i<30; i++) {
+                effects.push({
+                    type: 'particle',
+                    x, y,
+                    vx: (Math.random()-0.5)*20, vy: (Math.random()-0.5)*20,
+                    size: Math.random()*5 + 1, color, life: 1.0
+                });
+            }
+        }
+
+        function drawMagicCircle(ctx, circle) {
+            ctx.save();
+            ctx.translate(circle.x, circle.y);
+            ctx.scale(1, 0.3);
+            ctx.rotate(circle.rotation);
+            
+            ctx.strokeStyle = circle.color;
+            ctx.lineWidth = 2;
+            
+            ctx.beginPath(); ctx.arc(0, 0, 120, 0, Math.PI*2); ctx.stroke();
+            ctx.beginPath();
+            for(let i=0; i<6; i++) {
+                let angle = (i * Math.PI * 2) / 6;
+                let x = Math.cos(angle) * 120;
+                let y = Math.sin(angle) * 120;
+                if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+            }
+            ctx.closePath(); ctx.stroke();
+            
+            circle.rotation += 0.005;
+            ctx.restore();
+        }
+
+        function drawHarry(ctx, x, y) {
+            ctx.save();
+            ctx.translate(x, y);
+
+            // 腳下光晕
+            const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, 80);
+            glow.addColorStop(0, 'rgba(0, 234, 255, 0.2)');
+            glow.addColorStop(1, 'rgba(0, 234, 255, 0)');
+            ctx.fillStyle = glow;
+            ctx.beginPath(); ctx.arc(0, 100, 100, 0, Math.PI*2); ctx.fill();
+
+            // 袍子
+            const robeGrad = ctx.createLinearGradient(-45, 0, 45, 0);
+            robeGrad.addColorStop(0, '#0a0a0a'); robeGrad.addColorStop(1, '#1a1a1a');
+            ctx.fillStyle = robeGrad;
+            ctx.beginPath(); ctx.moveTo(-45, 120); ctx.quadraticCurveTo(-20, -50, 0, -50); ctx.quadraticCurveTo(20, -50, 45, 120); ctx.fill();
+
+            ctx.fillStyle = '#ffe9d1';
+            ctx.beginPath(); ctx.arc(0, -80, 30, 0, Math.PI*2); ctx.fill();
+            
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(-12, -80, 10, 0, Math.PI*2); ctx.stroke();
+            ctx.beginPath(); ctx.arc(12, -80, 10, 0, Math.PI*2); ctx.stroke();
+
+            ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(0, -90, 32, Math.PI, Math.PI*2.1); ctx.fill();
+
+            // 魔法棒 (冬青木)
+            ctx.save();
+            ctx.translate(25, -20);
+            ctx.rotate(-Math.PI / 4);
+            const wandGrad = ctx.createLinearGradient(0, 0, 0, 80);
+            wandGrad.addColorStop(0, '#3d2b1f');
+            wandGrad.addColorStop(1, '#5d4037');
+            ctx.fillStyle = wandGrad;
+            ctx.fillRect(-2, 0, 4, 80);
+            ctx.shadowBlur = 10; ctx.shadowColor = '#00eaff';
+            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, 2, 0, Math.PI*2); ctx.fill();
+            ctx.restore();
+
+            ctx.restore();
+        }
+
+        function drawVoldemort(ctx, x, y) {
+            ctx.save();
+            ctx.translate(x, y);
+
+            const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, 80);
+            glow.addColorStop(0, 'rgba(42, 157, 143, 0.2)');
+            glow.addColorStop(1, 'rgba(42, 157, 143, 0)');
+            ctx.fillStyle = glow;
+            ctx.beginPath(); ctx.arc(0, 100, 100, 0, Math.PI*2); ctx.fill();
+
+            const robeGrad = ctx.createLinearGradient(-50, 0, 50, 0);
+            robeGrad.addColorStop(0, '#051005'); robeGrad.addColorStop(1, '#0a200a');
+            ctx.fillStyle = robeGrad;
+            ctx.beginPath(); ctx.moveTo(-50, 120); ctx.quadraticCurveTo(-20, -50, 0, -50); ctx.quadraticCurveTo(20, -50, 50, 120); ctx.fill();
+
+            ctx.fillStyle = '#f0f0f0';
+            ctx.beginPath(); ctx.arc(0, -90, 32, 0, Math.PI*2); ctx.fill();
+            
+            ctx.fillStyle = '#ff0000';
+            ctx.beginPath(); ctx.ellipse(-12, -95, 5, 2, 0, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(12, -95, 5, 2, 0, 0, Math.PI*2); ctx.fill();
+
+            // 魔法棒 (接骨木)
+            ctx.save();
+            ctx.translate(-25, -20);
+            ctx.rotate(Math.PI / 4);
+            const wandGrad = ctx.createLinearGradient(0, 0, 0, 90);
+            wandGrad.addColorStop(0, '#e0e0d1');
+            wandGrad.addColorStop(1, '#a0a080');
+            ctx.fillStyle = wandGrad;
+            ctx.fillRect(-2, 0, 4, 90);
+            ctx.shadowBlur = 15; ctx.shadowColor = '#2a9d8f';
+            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, 2, 0, Math.PI*2); ctx.fill();
+            ctx.restore();
+
+            ctx.restore();
+        }
+
+        function animate() {
+            // 清除畫布，準備繪製
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. 繪製背景 (bgImage 或 預設漸層)
+            if (bgLoaded && bgImage.complete && bgImage.naturalWidth !== 0) {
+                // 使用 object-fit: cover 的邏輯來繪製圖片
+                const imgRatio = bgImage.width / bgImage.height;
+                const canvasRatio = canvas.width / canvas.height;
+                let dWidth, dHeight, dx, dy;
+
+                if (canvasRatio > imgRatio) {
+                    dWidth = canvas.width;
+                    dHeight = canvas.width / imgRatio;
+                    dx = 0;
+                    dy = (canvas.height - dHeight) / 2;
+                } else {
+                    dWidth = canvas.height * imgRatio;
+                    dHeight = canvas.height;
+                    dx = (canvas.width - dWidth) / 2;
+                    dy = 0;
+                }
+                
+                ctx.save();
+                ctx.globalAlpha = 1.0; // 確保圖片不透明
+                ctx.drawImage(bgImage, dx, dy, dWidth, dHeight);
+                
+                // 加一層極淡的黑色遮罩，讓角色和特效在圖片上更明顯，但不遮擋背景
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.restore();
+            } else {
+                // 如果圖片未載入，使用預設的魔法星空漸層
+                const grad = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 0, canvas.width/2, canvas.height/2, canvas.width);
+                grad.addColorStop(0, '#1a1e2e'); 
+                grad.addColorStop(0.6, '#0a0e1a');
+                grad.addColorStop(1, '#020408');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            // 2. 繪製魔法元素 (魔法陣、星星、粒子)
+            // 這些會疊加在背景圖之上
+            
+            // 閃爍星星 (減少透明度，讓背景圖可見)
+            if(!bgLoaded) { // 如果有圖片，減少星星數量以免雜亂，這裡只有沒圖時顯示大量星星
+                stars.forEach(s => {
+                    s.opacity += s.blinkSpeed;
+                    if(s.opacity > 1 || s.opacity < 0.2) s.blinkSpeed *= -1;
+                    ctx.fillStyle = `rgba(255, 255, 255, ${s.opacity})`;
+                    ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI*2); ctx.fill();
+                });
+            }
+
+            backgroundFlashes = backgroundFlashes.filter(f => {
+                ctx.fillStyle = f.color; ctx.globalAlpha = f.life;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                f.life -= 0.05; return f.life > 0;
+            });
+            ctx.globalAlpha = 1.0;
+
+            // 魔法陣 (保持顯示)
+            magicCircles.forEach(c => drawMagicCircle(ctx, c));
+
+            ctx.save();
+            if(shake > 0) {
+                ctx.translate((Math.random()-0.5)*shake, (Math.random()-0.5)*shake);
+                shake *= 0.9;
+            }
+
+            // 3. 繪製角色
+            drawHarry(ctx, harryPos.x, harryPos.y);
+            drawVoldemort(ctx, voldyPos.x, voldyPos.y);
+
+            // 4. 繪製戰鬥特效
+            effects = effects.filter(e => {
+                e.life -= 0.03;
+                if(e.type === 'spell') {
+                    ctx.save();
+                    ctx.shadowBlur = 30; ctx.shadowColor = e.color;
+                    ctx.strokeStyle = e.color; ctx.lineWidth = 15 * e.life;
+                    ctx.globalAlpha = e.life;
+                    ctx.beginPath(); ctx.moveTo(e.x1, e.y1);
+                    for(let i=1; i<=10; i++) {
+                        let tx = e.x1 + (e.x2-e.x1)*(i/10);
+                        let ty = e.y1 + (e.y2-e.y1)*(i/10) + (Math.sin(Date.now()*0.015 + i)*12);
+                        ctx.lineTo(tx, ty);
+                    }
+                    ctx.stroke();
+                    ctx.strokeStyle = '#fff'; ctx.lineWidth = 4 * e.life; ctx.stroke();
+                    ctx.restore();
+                } else {
+                    ctx.fillStyle = e.color; ctx.globalAlpha = e.life;
+                    ctx.beginPath(); ctx.arc(e.x, e.y, e.size, 0, Math.PI*2); ctx.fill();
+                    e.x += e.vx; e.y += e.vy; e.vy += 0.3;
+                }
+                return e.life > 0;
+            });
+
+            ctx.restore();
+            requestAnimationFrame(animate);
+        }
+
+        initScene();
+        window.addEventListener('resize', initScene);
+        document.getElementById('start-btn').onclick = startGame;
+        animate();
+    </script>
+</body>
+</html>
